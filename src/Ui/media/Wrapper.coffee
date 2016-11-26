@@ -111,6 +111,8 @@ class Wrapper
 			@actionPrompt(message)
 		else if cmd == "wrapperSetViewport" # Set the viewport
 			@actionSetViewport(message)
+		else if cmd == "wrapperSetTitle"
+			$("head title").text(message.params)
 		else if cmd == "wrapperReload" # Reload current page
 			@actionReload(message)
 		else if cmd == "wrapperGetLocalStorage"
@@ -169,7 +171,7 @@ class Wrapper
 
 	actionPermissionAdd: (message) ->
 		permission = message.params
-		@displayConfirm "This site requests permission: <b>#{@toHtmlSafe(permission)}</b>", "Grant", =>
+		@displayConfirm "This site requests permission:" + " <b>#{@toHtmlSafe(permission)}</b>", "Grant", =>
 			@ws.cmd "permissionAdd", permission, =>
 				@sendInner {"cmd": "response", "to": message.id, "result": "Granted"}
 

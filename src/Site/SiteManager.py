@@ -19,12 +19,14 @@ class SiteManager(object):
         self.log = logging.getLogger("SiteManager")
         self.log.debug("SiteManager created.")
         self.sites = None
+        self.loaded = False
         gevent.spawn(self.saveTimer)
         atexit.register(self.save)
 
     # Load all sites from data/sites.json
     def load(self, cleanup=True):
         self.log.debug("Loading sites...")
+        self.loaded = False
         from Site import Site
         if self.sites is None:
             self.sites = {}
@@ -50,14 +52,19 @@ class SiteManager(object):
             for row in ContentDb.getContentDb().execute("SELECT * FROM site"):
                 if row["address"] not in self.sites:
                     self.log.info("Deleting orphan site from content.db: %s" % row["address"])
-                    ContentDb.getContentDb().deleteSite(row["address"])
+                    ContentDb.getContentDb().execute("DELETE FROM site WHERE ?", {"address": row["address"]})
 
         if added:
             self.log.debug("SiteManager added %s sites" % added)
+        self.loaded = True
 
     def save(self):
         if not self.sites:
-            self.log.debug("Save: No sites found")
+            self.log.debug("Save skipped: No sites found")
+            return
+        if not self.loaded:
+            self.log.debug("Save skipped: Not loaded")
+            return
         s = time.time()
         data = {}
         # Generate data file
@@ -68,7 +75,10 @@ class SiteManager(object):
             data[address]["cache"]["bad_files"] = site.bad_files
             data[address]["cache"]["hashfield"] = site.content_manager.hashfield.tostring().encode("base64")
 
-        helper.atomicWrite("%s/sites.json" % config.data_dir, json.dumps(data, indent=2, sort_keys=True))
+        if data:
+            helper.atomicWrite("%s/sites.json" % config.data_dir, json.dumps(data, indent=2, sort_keys=True))
+        else:
+            self.log.debug("Save error: No data")
         # Remove cache from site settings
         for address, site in self.list().iteritems():
             site.settings["cache"] = {}
@@ -110,7 +120,7 @@ class SiteManager(object):
                 site.settings["serving"] = True
             site.saveSettings()
             if all_file:  # Also download user files on first sync
-                site.download(blind_includes=True)
+                site.download(check_size=True, blind_includes=True)
         else:
             if all_file:
                 site.download()

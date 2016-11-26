@@ -1,14 +1,15 @@
 import argparse
 import sys
 import os
+import locale
 import ConfigParser
 
 
 class Config(object):
 
     def __init__(self, argv):
-        self.version = "0.4.1"
-        self.rev = 1525
+        self.version = "0.5.1"
+        self.rev = 1756
         self.argv = argv
         self.action = None
         self.config_file = "zeronet.conf"
@@ -36,7 +37,7 @@ class Config(object):
             "udp://tracker.coppersurfer.tk:6969",
             "udp://tracker.leechers-paradise.org:6969",
             "udp://9.rarbg.com:2710",
-            "http://tracker.aletorrenty.pl:2710/announce",
+            "http://tracker.tordb.ml:6881/announce",
             "http://explodie.org:6969/announce",
             "http://tracker1.wasabii.com.tw:6969/announce"
         ]
@@ -45,6 +46,12 @@ class Config(object):
             coffeescript = "type %s | tools\\coffee\\coffee.cmd"
         else:
             coffeescript = None
+
+        try:
+            language, enc = locale.getdefaultlocale()
+            language = language.split("_")[0]
+        except Exception:
+            language = "en"
 
         use_openssl = True
 
@@ -131,6 +138,7 @@ class Config(object):
         self.parser.add_argument('--data_dir', help='Path of data directory', default="data", metavar="path")
         self.parser.add_argument('--log_dir', help='Path of logging directory', default="log", metavar="path")
 
+        self.parser.add_argument('--language', help='Web interface language', default=language, metavar='language')
         self.parser.add_argument('--ui_ip', help='Web interface bind address', default="127.0.0.1", metavar='ip')
         self.parser.add_argument('--ui_port', help='Web interface bind port', default=43110, type=int, metavar='port')
         self.parser.add_argument('--ui_restrict', help='Restrict web access', default=False, metavar='ip', nargs='*')
@@ -303,5 +311,36 @@ class Config(object):
 
         ConfigPlugin(self)
 
+    def saveValue(self, key, value):
+        if not os.path.isfile(self.config_file):
+            content = ""
+        else:
+            content = open(self.config_file).read()
+        lines = content.splitlines()
+
+        global_line_i = None
+        key_line_i = None
+        i = 0
+        for line in lines:
+            if line.strip() == "[global]":
+                global_line_i = i
+            if line.startswith(key + " = "):
+                key_line_i = i
+            i += 1
+
+        if value is None:  # Delete line
+            if key_line_i:
+                del lines[key_line_i]
+        else:  # Add / update
+            new_line = "%s = %s" % (key, str(value).replace("\n", "").replace("\r", ""))
+            if key_line_i:  # Already in the config, change the line
+                lines[key_line_i] = new_line
+            elif global_line_i is None:  # No global section yet, append to end of file
+                lines.append("[global]")
+                lines.append(new_line)
+            else:  # Has global section, append the line after it
+                lines.insert(global_line_i + 1, new_line)
+
+        open(self.config_file, "w").write("\n".join(lines))
 
 config = Config(sys.argv)
